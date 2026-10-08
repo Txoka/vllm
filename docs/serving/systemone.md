@@ -98,11 +98,19 @@ computation changed from BF16 to FP32. Weight values and input tokens were held
 fixed. FP32 head accumulation does not require a duplicate FP32 head weight on
 CUDA: vLLM uses `torch.mm(..., out_dtype=torch.float32)`.
 
-On the 12 GB GPU, use `--max-num-batched-tokens 2048 --enable-chunked-prefill`
-with context 8192. An 8192-token prefill batch left only 0.18 GiB of KV budget
-and failed startup; reducing the activation batch allowed startup with about
-0.93 GiB of KV cache. Model context and precision were preserved. Full public,
-typed and concurrency results remain pending at this documentation checkpoint.
+On the 12 GB GPU, an 8192-token prefill batch left only 0.18 GiB of KV
+budget and failed startup. Reducing the activation batch to 2048 allowed
+startup with about 0.93 GiB of KV cache, but the full public benchmark later
+exhausted memory during an MLP activation allocation. Startup success alone
+therefore does not establish sustained serving capacity.
+
+The next validation uses `--max-num-batched-tokens 512`,
+`--kv-cache-memory-bytes 536870912` and `--enable-chunked-prefill` while
+preserving context 8192 and the model precision. The explicit KV allocation
+exceeds the estimated 0.44 GiB required for one maximum-length request;
+concurrent long requests may require scheduling/preemption rather than all
+remaining resident. These are development-machine settings, not production
+recommendations. Full public, typed and concurrency results remain pending.
 
 ## Reproduce the tested Linux x86-64 runtime
 
