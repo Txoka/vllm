@@ -166,3 +166,16 @@ Nine CPU protocol/HTTP tests pass, including structured criteria, aliases,
 confidence semantics and pre-engine rejection. Live GPU validation of this
 standard-server integration remains pending behind the ongoing serial scale
 validation of the original prototype. Those active test files are unchanged.
+
+Once the standard server is running, validate both aliases and rounded wire
+semantics with:
+
+```bash
+.venv/bin/python benchmarks/check_decision_contract.py \
+  --url http://127.0.0.1:11443 --model winnow-rlcd \
+  --output /tmp/decision-contract.json
+```
+
+This client checks all three decision types, question ordering, usage and
+confidence/expected-score consistency. It does not replace model-quality or
+concurrency evaluation, and starting it does not start another model engine.
