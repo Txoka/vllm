@@ -32,6 +32,7 @@ Example (GPU validation still pending):
 .venv/bin/python -m vllm.entrypoints.systemone.api_server \
   --model /home/txoka/Desktop/winnow-rlcd/models/vllm/winnow-real19-synth05-step2500-bf16 \
   --load-format safetensors --dtype bfloat16 \
+  --hf-overrides '{"head_dtype":"float32"}' \
   --enable-prefix-caching --max-model-len 8192 \
   --logprobs-mode raw_logprobs --decision-model-name winnow-rlcd
 ```
@@ -60,7 +61,7 @@ References:
 The development GPU is an RTX 4070 with 12 GB VRAM. The full BF16 export
 requires CPU offload on this machine; throughput with offload is a hardware
 constraint, not representative of a sufficiently sized production GPU. Start
-with `--cpu-offload-gb 8 --gpu-memory-utilization 0.85 --enforce-eager` and a
+with `--cpu-offload-gb 10 --gpu-memory-utilization 0.80 --enforce-eager` and a
 short context for correctness. Check memory before increasing context or batch
 capacity. Alternative FP8/int8 quantization needs its own parity evaluation;
 it is not equivalent to the original GGUF Q8_0.
@@ -84,3 +85,21 @@ The client also tests unique request nonces before the long state text, reducing
 inter-request prefix reuse. Those requests validate probability structure but
 do not assert equality to the shared-input reference, since their inputs differ.
 This complements the warmed shared-prefix case.
+
+## Precision diagnostic on the development GPU
+
+The initial 13-question native CPU/GPU check found a maximum probability
+absolute difference of 0.01935 with a BF16 head. Using the supported
+`--hf-overrides '{"head_dtype":"float32"}'` option and a matched FP32-head CPU
+reference reduced this to 0.00991. This is within the declared 0.01 gate, but is
+not exact parity. Report residual differences, including backend/batch effects.
+The CPU model alone changed by up to 0.02532 when only its head and softcap
+computation changed from BF16 to FP32. Weight values and input tokens were held
+fixed. FP32 head accumulation does not require a duplicate FP32 head weight on
+CUDA: vLLM uses `torch.mm(..., out_dtype=torch.float32)`.
+
+On the 12 GB GPU, use `--max-num-batched-tokens 2048 --enable-chunked-prefill`
+with context 8192. An 8192-token prefill batch left only 0.18 GiB of KV budget
+and failed startup; reducing the activation batch allowed startup with about
+0.93 GiB of KV cache. Model context and precision were preserved. Full public,
+typed and concurrency results remain pending at this documentation checkpoint.
