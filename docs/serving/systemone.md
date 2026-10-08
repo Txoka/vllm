@@ -179,3 +179,51 @@ semantics with:
 This client checks all three decision types, question ordering, usage and
 confidence/expected-score consistency. It does not replace model-quality or
 concurrency evaluation, and starting it does not start another model engine.
+
+## AWQ residency validation
+
+The next format checks use the same trained dense export with AWQ at W4A16 and
+W8A16, stored as compressed-tensors safetensors. This is different from a legacy
+AutoAWQ checkpoint: the pinned legacy loader accepts only four bits. The
+compressed-tensors configuration reader accepts the tiny four/eight-bit exports;
+full-model CUDA kernels and quality still need validation.
+
+Gemma4 E4B's BF16 embedding tables occupy approximately 6.98 GB. Quantizing only
+linear layers does not establish that the model fits a 12 GB GPU. The conversion
+also packs the ordinary and per-layer embeddings with groupwise INT weights.
+AWQ balancing targets the dense MLP paths; attention linears and lookup tables
+use groupwise weight quantization. Both precisions use the same calibration
+prompts and group size. No gradient training or benchmark fitting occurs.
+
+`benchmarks/prepare_awq_calibration.py` selects 256 distinct fixed validation
+states, with 192 real and 64 procedural questions, balanced within source/type
+buckets. It requires all three primitive types and skips oversized prompts
+without truncating them. The procedural portion supplies score questions absent
+from the real portion of this validation selection. This calibration selection
+does not change the model's training mixture.
+
+Use an isolated quantizer environment for
+`benchmarks/quantize_decision_awq.py`: the tested quantizer revision is
+`vllm-project/llm-compressor@af7967973f9e0928ad8b25e05a79b1af97394bc4`, with
+Torch 2.14.1, Transformers 5.18.0 and compressed-tensors 0.19.1a20261003.
+The serving environment remains unchanged. Conversion verifies source weights
+and calibration hashes, preserves attribution, explicitly requests packed
+embedding storage, and records output hashes. The tiny CPU-only preflight
+exported both precisions; this does not prove GPU serving support.
+
+For each resulting model, run the standard endpoint with CPU offload disabled:
+
+```bash
+.venv/bin/python benchmarks/validate_standard_decisions.py \
+  --model /path/to/quantized-model --output /path/to/results \
+  --quantized --cpu-offload-gb 0 --performance
+```
+
+This checks both endpoint aliases and all three primitives, records GPU-memory
+usage, and runs the 64-request concurrency1/4/16/64 matrix over short/long,
+shared/unique inputs. Four-decimal wire rounding is declared explicitly; the
+legacy benchmark's strict probability check remains its default. Optional
+`--quality-script`, `--quality-python` and `--quality-name` arguments run the
+reserved public/typed quality suite on the same live server before timing.
+Full-model results are pending; do not infer accuracy or residency from file size
+or startup alone.

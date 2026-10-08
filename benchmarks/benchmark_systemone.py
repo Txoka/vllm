@@ -26,7 +26,7 @@ def call(url, payload, timeout=600):
     return time.perf_counter() - started, result
 
 
-def vector(response, questions):
+def vector(response, questions, decimals=None):
     answers = response["answers"]
     if set(answers) != set(questions):
         raise ValueError("Response question IDs differ from request")
@@ -44,7 +44,12 @@ def vector(response, questions):
             probabilities = [answer["probabilities"][key] for key in keys]
         if not all(math.isfinite(p) and 0 <= p <= 1 for p in probabilities):
             raise ValueError("Invalid probability")
-        if abs(sum(probabilities) - 1) > 1e-6:
+        tolerance = (
+            1e-6
+            if decimals is None
+            else len(probabilities) * 0.5 * 10 ** (-decimals) + 1e-8
+        )
+        if abs(sum(probabilities) - 1) > tolerance:
             raise ValueError("Probabilities do not sum to one")
         values.extend(probabilities)
     return values
@@ -64,6 +69,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--max-probability-delta", type=float, default=0.005)
     parser.add_argument("--request-timeout", type=float, default=7200)
+    parser.add_argument("--probability-decimals", type=int, choices=range(1, 10))
     args = parser.parse_args()
     if (
         args.requests < 1
@@ -93,7 +99,7 @@ def main():
         state = "The sky is blue. " + "Neutral background information. " * words
         payload = {"model": args.model, "state": state, "questions": questions}
         cold_seconds, cold = call(args.url, payload, args.request_timeout)
-        reference = vector(cold, questions)
+        reference = vector(cold, questions, args.probability_decimals)
         call(args.url, payload, args.request_timeout)
         for concurrency in args.concurrency:
             started = time.perf_counter()
@@ -110,7 +116,11 @@ def main():
             deltas = [
                 max(
                     abs(a - b)
-                    for a, b in zip(vector(result, questions), reference, strict=True)
+                    for a, b in zip(
+                        vector(result, questions, args.probability_decimals),
+                        reference,
+                        strict=True,
+                    )
                 )
                 for _, result in results
             ]
@@ -136,6 +146,7 @@ def main():
                     {
                         "model": args.model,
                         "request_timeout": args.request_timeout,
+                        "probability_decimals": args.probability_decimals,
                         "benchmark_sha256": hashlib.sha256(
                             Path(__file__).read_bytes()
                         ).hexdigest(),
@@ -168,7 +179,7 @@ def main():
                 )
             elapsed = time.perf_counter() - started
             for _, response in unique_results:
-                vector(response, questions)
+                vector(response, questions, args.probability_decimals)
             latencies = [seconds for seconds, _ in unique_results]
             unique_report = {
                 "state": "short" if words == 0 else "long",
@@ -191,6 +202,7 @@ def main():
                     {
                         "model": args.model,
                         "request_timeout": args.request_timeout,
+                        "probability_decimals": args.probability_decimals,
                         "benchmark_sha256": hashlib.sha256(
                             Path(__file__).read_bytes()
                         ).hexdigest(),
