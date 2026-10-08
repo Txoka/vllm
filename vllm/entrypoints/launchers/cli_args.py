@@ -75,6 +75,12 @@ class BaseFrontendArgs:
     the subclasses.
     """
 
+    decision_protocol: Literal["winnow"] | None = None
+    """Enable Ollaya-compatible decision routes with this trained prompt protocol.
+    Weight loading and quantization use the normal engine configuration."""
+    decision_temperature: float = 1.0
+    """Positive candidate calibration temperature for the decision endpoint."""
+
     lora_modules: list[LoRAModulePath] | None = None
     """LoRA modules configurations in either 'name=path' format or JSON format
     or JSON list format. Example (old format): `'name=path'` Example (new
@@ -460,6 +466,18 @@ def validate_parsed_serve_args(args: argparse.Namespace):
     # LaunchSubcommandBase.add_cli_args), so its args are serve args as well.
     if hasattr(args, "subparser") and args.subparser not in ("serve", "launch"):
         return
+
+    if getattr(args, "decision_protocol", None):
+        import math
+
+        if (
+            not math.isfinite(args.decision_temperature)
+            or args.decision_temperature <= 0
+        ):
+            raise ValueError("Decision temperature must be finite and positive")
+        args.max_logprobs = max(args.max_logprobs, 64)
+        if args.logprobs_mode != "raw_logprobs":
+            raise ValueError("Decision scoring requires --logprobs-mode raw_logprobs")
 
     # Ensure that the chat template is valid; raises if it likely isn't
     validate_chat_template(args.chat_template)

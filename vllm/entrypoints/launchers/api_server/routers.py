@@ -36,6 +36,11 @@ def register_api_routers(
 
         register_vllm_dev_api_routers(app)
 
+    if "generate" in supported_tasks and getattr(args, "decision_protocol", None):
+        from vllm.entrypoints.systemone.serving import attach_router
+
+        attach_router(app)
+
     if "generate" in supported_tasks:
         from vllm.entrypoints.generate.api_router import (
             register_generate_api_routers,

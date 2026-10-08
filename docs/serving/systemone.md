@@ -134,3 +134,35 @@ uv --no-config pip install --python .venv/bin/python -e .
 Observed versions: PyTorch2.13.0, Transformers5.17.0, Triton3.7.1 and
 FlashInfer0.7.0.post1. CPU offload is a local capacity workaround; the native
 safetensors export can run entirely on a larger GPU without changing the API.
+
+## Standard server integration
+
+The endpoint can also run inside the standard server, sharing its model engine,
+model loader, authentication and lifecycle:
+
+```bash
+vllm serve /path/to/native-export --served-model-name winnow-rlcd \
+  --decision-protocol winnow --decision-temperature 1 \
+  --logprobs-mode raw_logprobs --max-logprobs 64
+```
+
+Both `/v1/systemone` and `/v1/decisions` accept the Ollaya text decision contract:
+JSON state, named `noul`, `choice` and `score` questions, structured instructions
+and ordered criteria. Confidence uses `(K * max_probability - 1) / (K - 1)`;
+probabilities and expected ordinal scores are returned separately. Requests are
+bounded to 8 MiB and 256 questions, with bounded admission and cancellation.
+Model names must match a served alias. Model-specific embedded presets and image
+inputs are not implemented by this text protocol.
+
+The decision endpoint does not impose a weight serialization. Native safetensors
+uses the normal loader; AWQ uses a compatible quantized checkpoint and the normal
+AWQ backend. GGUF requires the experimental external
+[vLLM GGUF plugin](https://github.com/vllm-project/vllm-gguf-plugin), which has not
+yet been validated for this Winnow export. Loader support does not establish
+architecture, quantization or numerical compatibility. The current protocol is
+Winnow-specific; other architectures require their own prompt/token mapping.
+
+Nine CPU protocol/HTTP tests pass, including structured criteria, aliases,
+confidence semantics and pre-engine rejection. Live GPU validation of this
+standard-server integration remains pending behind the ongoing serial scale
+validation of the original prototype. Those active test files are unchanged.

@@ -73,3 +73,4 @@ tests/tools/test_config_validator.py  # logic covered by the validate-config pre
 
 # Experimental decision fork: manually gated protocol tests include a local trained tokenizer fixture.
 tests/entrypoints/systemone/test_protocol.py  # Run manually; no System One Buildkite job exists in this experimental fork yet.
+tests/entrypoints/systemone/test_serving.py  # Manual CPU HTTP contract checks require the local native Winnow tokenizer fixture.

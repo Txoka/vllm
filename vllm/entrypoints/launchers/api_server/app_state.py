@@ -157,6 +157,11 @@ async def init_app_state(
 
         init_pooling_state(engine_client, state, args, request_logger, supported_tasks)
 
+    if "generate" in supported_tasks and getattr(args, "decision_protocol", None):
+        from vllm.entrypoints.systemone.serving import init_state
+
+        init_state(engine_client, state, args)
+
     await init_endpoint_plugins_state(engine_client, state, args)
 
     state.enable_server_load_tracking = args.enable_server_load_tracking
