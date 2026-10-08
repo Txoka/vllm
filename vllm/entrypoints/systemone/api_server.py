@@ -98,7 +98,10 @@ def main():
         args.decision_temperature,
         engine.model_config.max_model_len,
     )
-    uvicorn.run(app, host=args.host, port=args.port)
+    try:
+        uvicorn.run(app, host=args.host, port=args.port)
+    finally:
+        engine.shutdown(timeout=30)
 
 
 if __name__ == "__main__":
