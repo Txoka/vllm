@@ -103,3 +103,21 @@ with context 8192. An 8192-token prefill batch left only 0.18 GiB of KV budget
 and failed startup; reducing the activation batch allowed startup with about
 0.93 GiB of KV cache. Model context and precision were preserved. Full public,
 typed and concurrency results remain pending at this documentation checkpoint.
+
+## Reproduce the tested Linux x86-64 runtime
+
+This branch uses the official v0.31.0 native wheel with release-matched source.
+The extra fork commits change Python endpoint/benchmark code only. Do not use
+an arbitrary main-branch source checkout with release native binaries.
+
+```bash
+uv --no-config venv --python 3.12 .venv
+uv --no-config pip install --python .venv/bin/python vllm==0.31.0
+VLLM_USE_PRECOMPILED=1 \
+VLLM_PRECOMPILED_WHEEL_LOCATION=https://files.pythonhosted.org/packages/e1/98/841d1328827dc082492fcbb0f57bdf6a9d35aa0df52bd47b75be3f504804/vllm-0.31.0-cp38-abi3-manylinux_2_28_x86_64.whl \
+uv --no-config pip install --python .venv/bin/python -e .
+```
+
+Observed versions: PyTorch2.13.0, Transformers5.17.0, Triton3.7.1 and
+FlashInfer0.7.0.post1. CPU offload is a local capacity workaround; the native
+safetensors export can run entirely on a larger GPU without changing the API.
