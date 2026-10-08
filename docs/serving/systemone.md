@@ -42,7 +42,10 @@ results and concurrency correctness. Then measure p50/p95 latency and decisions
 per second at concurrency1/4/16/64 with short/long shared states. GPU validation
 must run serially after the authorized Qwen experiment, never alongside training.
 
-Upstream starting revision: `a4b14e57b6d5ad25a2215eff93d6f93ba05005df`.
+Runtime base: official vLLM `v0.31.0`, revision
+`db9527a46873454610df6dbedf79a36d6bf1a7f6`. The original main-based prototype
+remains on `feat/system1-decisions`; this release-matched implementation is on
+`feat/system1-decisions-v031`.
 No upstream PR is requested. This is a prototype, not validated production support.
 
 References:
