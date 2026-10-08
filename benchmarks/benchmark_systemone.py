@@ -9,6 +9,7 @@ import math
 import statistics
 import time
 import urllib.request
+import uuid
 from pathlib import Path
 
 
@@ -107,6 +108,7 @@ def main():
             latencies = [seconds for seconds, _ in results]
             report = {
                 "state": "short" if words == 0 else "long",
+                "prefix_pattern": "shared",
                 "concurrency": concurrency,
                 "requests": args.requests,
                 "questions_per_request": len(questions),
@@ -128,6 +130,44 @@ def main():
                 raise RuntimeError(
                     "Concurrent probabilities exceeded the declared tolerance"
                 )
+
+            unique_payloads = [
+                {
+                    "model": args.model,
+                    "state": {"request_nonce": uuid.uuid4().hex, "text": state},
+                    "questions": questions,
+                }
+                for _ in range(args.requests)
+            ]
+            started = time.perf_counter()
+            with concurrent.futures.ThreadPoolExecutor(concurrency) as pool:
+                unique_results = list(
+                    pool.map(lambda request: call(args.url, request), unique_payloads)
+                )
+            elapsed = time.perf_counter() - started
+            for _, response in unique_results:
+                vector(response, questions)
+            latencies = [seconds for seconds, _ in unique_results]
+            unique_report = {
+                "state": "short" if words == 0 else "long",
+                "prefix_pattern": "unique_nonce_before_state_text",
+                "concurrency": concurrency,
+                "requests": args.requests,
+                "questions_per_request": len(questions),
+                "elapsed_seconds": elapsed,
+                "requests_per_second": args.requests / elapsed,
+                "decisions_per_second": args.requests * len(questions) / elapsed,
+                "p50_seconds": statistics.median(latencies),
+                "p95_seconds": percentile(latencies, 0.95),
+                "max_probability_delta": None,
+                "note": "Different inputs: probabilities validated, not compared "
+                "to the shared-input reference. Unique prefixes are not prewarmed.",
+            }
+            reports.append(unique_report)
+            args.output.write_text(
+                json.dumps({"model": args.model, "results": reports}, indent=2)
+            )
+            print(json.dumps(unique_report), flush=True)
 
 
 if __name__ == "__main__":

@@ -79,3 +79,8 @@ prefix caching both enabled and disabled in separately labeled output files.
 The first-request timing is not guaranteed to represent an empty engine cache.
 Concurrent-probability tolerance defaults to 0.005 on the 0–1 scale; report
 actual deltas rather than describing tolerance acceptance as exact equality.
+
+The client also tests unique request nonces before the long state text, reducing
+inter-request prefix reuse. Those requests validate probability structure but
+do not assert equality to the shared-input reference, since their inputs differ.
+This complements the warmed shared-prefix case.
