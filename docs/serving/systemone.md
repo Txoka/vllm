@@ -81,6 +81,11 @@ The first-request timing is not guaranteed to represent an empty engine cache.
 Concurrent-probability tolerance defaults to 0.005 on the 0–1 scale; report
 actual deltas rather than describing tolerance acceptance as exact equality.
 
+The client timeout defaults to 7200 seconds per request to permit queued long
+requests on the CPU-offloaded development machine. Override with
+`--request-timeout` for a production latency budget. Timeouts fail the run;
+requests are not silently omitted or retried.
+
 The client also tests unique request nonces before the long state text, reducing
 inter-request prefix reuse. Those requests validate probability structure but
 do not assert equality to the shared-input reference, since their inputs differ.

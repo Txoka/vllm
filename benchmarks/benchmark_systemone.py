@@ -4,6 +4,7 @@
 
 import argparse
 import concurrent.futures
+import hashlib
 import json
 import math
 import statistics
@@ -13,14 +14,14 @@ import uuid
 from pathlib import Path
 
 
-def call(url, payload):
+def call(url, payload, timeout=600):
     started = time.perf_counter()
     request = urllib.request.Request(
         url + "/v1/systemone",
         data=json.dumps(payload).encode(),
         headers={"Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(request, timeout=600) as response:
+    with urllib.request.urlopen(request, timeout=timeout) as response:
         result = json.load(response)
     return time.perf_counter() - started, result
 
@@ -62,9 +63,15 @@ def main():
     parser.add_argument("--concurrency", type=int, nargs="+", default=[1, 4, 16, 64])
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--max-probability-delta", type=float, default=0.005)
+    parser.add_argument("--request-timeout", type=float, default=7200)
     args = parser.parse_args()
-    if args.requests < 1 or any(x < 1 for x in args.concurrency):
-        parser.error("Requests and concurrency must be positive")
+    if (
+        args.requests < 1
+        or any(x < 1 for x in args.concurrency)
+        or not math.isfinite(args.request_timeout)
+        or args.request_timeout <= 0
+    ):
+        parser.error("Requests, concurrency and timeout must be positive")
     questions = {
         "truth": {
             "type": "noul",
@@ -85,15 +92,17 @@ def main():
     for words in [0, 2000]:
         state = "The sky is blue. " + "Neutral background information. " * words
         payload = {"model": args.model, "state": state, "questions": questions}
-        cold_seconds, cold = call(args.url, payload)
+        cold_seconds, cold = call(args.url, payload, args.request_timeout)
         reference = vector(cold, questions)
-        call(args.url, payload)
+        call(args.url, payload, args.request_timeout)
         for concurrency in args.concurrency:
             started = time.perf_counter()
             with concurrent.futures.ThreadPoolExecutor(concurrency) as pool:
                 results = list(
                     pool.map(
-                        lambda _, request=payload: call(args.url, request),
+                        lambda _, request=payload: call(
+                            args.url, request, args.request_timeout
+                        ),
                         range(args.requests),
                     )
                 )
@@ -123,7 +132,17 @@ def main():
             reports.append(report)
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(
-                json.dumps({"model": args.model, "results": reports}, indent=2)
+                json.dumps(
+                    {
+                        "model": args.model,
+                        "request_timeout": args.request_timeout,
+                        "benchmark_sha256": hashlib.sha256(
+                            Path(__file__).read_bytes()
+                        ).hexdigest(),
+                        "results": reports,
+                    },
+                    indent=2,
+                )
             )
             print(json.dumps(report), flush=True)
             if max(deltas) > args.max_probability_delta:
@@ -142,7 +161,10 @@ def main():
             started = time.perf_counter()
             with concurrent.futures.ThreadPoolExecutor(concurrency) as pool:
                 unique_results = list(
-                    pool.map(lambda request: call(args.url, request), unique_payloads)
+                    pool.map(
+                        lambda request: call(args.url, request, args.request_timeout),
+                        unique_payloads,
+                    )
                 )
             elapsed = time.perf_counter() - started
             for _, response in unique_results:
@@ -165,7 +187,17 @@ def main():
             }
             reports.append(unique_report)
             args.output.write_text(
-                json.dumps({"model": args.model, "results": reports}, indent=2)
+                json.dumps(
+                    {
+                        "model": args.model,
+                        "request_timeout": args.request_timeout,
+                        "benchmark_sha256": hashlib.sha256(
+                            Path(__file__).read_bytes()
+                        ).hexdigest(),
+                        "results": reports,
+                    },
+                    indent=2,
+                )
             )
             print(json.dumps(unique_report), flush=True)
 
