@@ -70,3 +70,6 @@ tests/platforms/test_cpu.py  # CPU-only unit test; no job targets tests/platform
 
 # tests/tools/
 tests/tools/test_config_validator.py  # logic covered by the validate-config pre-commit hook; no test_areas job
+
+# Experimental decision fork: manually gated protocol tests include a local trained tokenizer fixture.
+tests/entrypoints/systemone/test_protocol.py  # Run manually; no System One Buildkite job exists in this experimental fork yet.
