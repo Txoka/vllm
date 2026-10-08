@@ -54,3 +54,28 @@ References:
 - <https://github.com/vllm-project/vllm/blob/main/docs/features/quantization/gguf.md>
 - `vllm/sampling_params.py` (`logprob_token_ids`)
 - `vllm/config/model.py` (`logprobs_mode`)
+
+## Local validation procedure
+
+The development GPU is an RTX 4070 with 12 GB VRAM. The full BF16 export
+requires CPU offload on this machine; throughput with offload is a hardware
+constraint, not representative of a sufficiently sized production GPU. Start
+with `--cpu-offload-gb 8 --gpu-memory-utilization 0.85 --enforce-eager` and a
+short context for correctness. Check memory before increasing context or batch
+capacity. Alternative FP8/int8 quantization needs its own parity evaluation;
+it is not equivalent to the original GGUF Q8_0.
+
+After the serial model correctness gate and public/typed benchmark:
+
+```bash
+.venv/bin/python benchmarks/benchmark_systemone.py \
+  --requests 64 --concurrency 1 4 16 64 \
+  --output /tmp/winnow-vllm-concurrency.json
+```
+
+This records short/long shared-state request p50/p95, decisions per second,
+and candidate-probability drift relative to a sequential request. Run with
+prefix caching both enabled and disabled in separately labeled output files.
+The first-request timing is not guaranteed to represent an empty engine cache.
+Concurrent-probability tolerance defaults to 0.005 on the 0–1 scale; report
+actual deltas rather than describing tolerance acceptance as exact equality.
